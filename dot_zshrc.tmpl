@@ -1,0 +1,55 @@
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(git zsh-autosuggestions zsh-syntax-highlighting)
+source $ZSH/oh-my-zsh.sh
+
+# universal
+alias ll='ls -la'
+alias gs='git status'
+alias gc='git commit'
+alias gp='git push'
+alias cls='clear'
+heads() { cat -n "$1" | head -n "${2:-10}"; }
+tails() { cat -n "$1" | tail -n "${2:-10}"; }
+alias project='tmux new-session -d -s project; tmux split-window -v -p 10 -t project; tmux attach-session -t project'
+export PYTHON_COLORS=0
+
+{{ if eq .chezmoi.os "android" }}
+_mpv_base() {
+  local mode="$1"
+  local link="$2"
+  FIFO="${TMPDIR:-$HOME}/mpv_stream.fifo"
+  STATUS="${TMPDIR:-$HOME}/mpv_pause_status"
+  RELAY_LOG="${TMPDIR:-$HOME}/mpv_relay.log"
+  PORT=8000
+  termux-notification-remove MPV 2>/dev/null
+  tmux kill-session -t music 2>/dev/null
+  local common="mpv --no-video --term-osd-bar \
+    --term-playing-msg='Now Playing: \${media-title}' \
+    --ytdl-format='bestaudio[ext=webm]/bestaudio' \
+    --loop-playlist=inf --save-position-on-quit \
+    --cache-secs=3 --msg-level=ffmpeg=fatal"
+  if [ "$mode" = "external" ]; then
+    [ -p "$FIFO" ] || mkfifo "$FIFO"
+    tmux new-session -d -s music "python3 \"$HOME/mpv_relay.py\" '$FIFO' $PORT '$STATUS' > '$RELAY_LOG' 2>&1 & \
+        $common --script-opts=write_status=yes \
+        --ao=pcm --ao-pcm-file='$FIFO' --ao-pcm-waveheader=no \
+        --af=format=format=s16:srate=48000:channels=stereo \
+        '$link'"
+    termux-notification-remove MPV
+  else
+    tmux new-session -d -s music "$common --script-opts=write_status=no \
+        '$link'"
+    termux-notification-remove MPV
+  fi
+}
+mpvn() { _mpv_base normal "${1:-$(read -p 'Paste link: ' r && echo $r)}"; }
+mpve() { _mpv_base external "${1:-$(read -p 'Paste link: ' r && echo $r)}"; }
+alias mpva='tmux attach -t music'
+alias tb65='termux-brightness 65'
+alias shizuku='adb shell "path=\$(pm path termux.privileged.api.zuku | cut -d: -f2 | grep base.apk); \${path%base.apk}lib/arm64/libshizuku.so"'
+nvim() {
+  command nvim "$@"
+  printf '\e[5 q'
+}
+{{ end }}
